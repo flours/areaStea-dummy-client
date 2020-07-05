@@ -3,7 +3,7 @@ from blockdef import BlockDef
 import json
 target_ip = "ec2-54-248-128-220.ap-northeast-1.compute.amazonaws.com"
 target_port = 1234
-buffer_size = 4096
+buffer_size = 8192
 
 
 
@@ -26,6 +26,12 @@ class gameLogic:
 
     def changeTurn(self):
         self.turn=(self.turn+1)%4
+        cnt=0
+        while not self.earyput(True):
+            self.turn=(self.turn+1)%4
+            cnt+=1
+            if cnt==4:exit()
+
 
     def isIn(self,x,y):
         if x<0 or y<0 or self.Fieldw<=x or self.Fieldh<=y:return False
@@ -74,10 +80,10 @@ class gameLogic:
         for i in self.field:
             print(*i)
 
-    def Test(self):
+    def Test(self,color):
         for num in range(4):
             for i in range(900):
-                print(self.putBlock(-3+i//30,-3+i%30,0,0,self.turn+1),i)
+                print(self.putBlock(-3+i//30,-3+i%30,0,0,color+1),i)
     def receiveInit(self,message):
         jsondic=json.loads(message)
         s=jsondic["PlayerRotation"].split(",")
@@ -87,12 +93,13 @@ class gameLogic:
                 break
         print("init success myturn is ",self.myColor)
         if self.turn==self.myColor:
-            self.earyput()
-    def earyput(self):
+            self.earyput(False)
+    def earyput(self,isCheckMode):
         for num in self.myblocks:
             for i in range(900):
-                for spin in range(1):
+                for spin in range(4):
                     if self.canPut(-3+i%30,-3+i//30,spin,num,self.turn+1):
+                        if isCheckMode:return True
                         data={}
                         data["x"]=-3+i%30
                         data["y"]=-3+i//30
@@ -101,11 +108,10 @@ class gameLogic:
                         data["color"]=self.turn 
                         print(json.dumps(data))
                         self.client.send(json.dumps(data).encode())
-                        self.putBlock(-3+i%30,-3+i//30,spin,num,self.turn+1)
-                        self.easyDisp()
                         return
 
         print("pass!!")
+        return False
         
 
     def receiveUpdate(self,message):
@@ -120,9 +126,10 @@ class gameLogic:
         self.easyDisp()
         print(x,y,blockId,spin,color)
         if self.turn==self.myColor:
-            self.earyput()
+            self.earyput(False)
         
     def receiveMessage(self,message):
+        print(message)
         jsondic=json.loads(message)
         if jsondic["messageType"]=="Init":self.receiveInit(message)
         if jsondic["messageType"]=="Update":self.receiveUpdate(message)
@@ -145,8 +152,14 @@ tcp_client.connect((target_ip,target_port))
 #tcp_client.send(b"Data by TCP Client!!")
 game.setclient(tcp_client)
 
+s=""
 while True:
   # サーバからのレスポンスを受信
   response = tcp_client.recv(buffer_size)
-  game.receiveMessage(response.decode())
+  s+=response.decode()
+  if response.decode()[-1]!="\n":
+    continue
+  print(s)
+  game.receiveMessage(s)
   print("[*]Received a response : {}".format(response))
+  s=""
