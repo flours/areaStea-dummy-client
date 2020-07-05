@@ -65,8 +65,9 @@ class gameLogic:
             if not targetBlock[i]:continue
             self.field[y+i//Blockw][x+i%Blockw]=color
         
+        if self.turn==self.myColor:
+            self.myblocks.remove(blockId)
         self.changeTurn()
-        self.myblocks.remove(blockId)
         return True
 
     def easyDisp(self):
@@ -91,19 +92,21 @@ class gameLogic:
         for num in self.myblocks:
             for i in range(900):
                 for spin in range(1):
-                    if self.canPut(-3+i//30,-3+i%30,spin,num,self.turn+1):
+                    if self.canPut(-3+i%30,-3+i//30,spin,num,self.turn+1):
                         data={}
-                        data["x"]=-3+i//30
-                        data["y"]=-3+i%30
+                        data["x"]=-3+i%30
+                        data["y"]=-3+i//30
                         data["spin"]=spin
                         data["BlockId"]=num
                         data["color"]=self.turn 
                         print(json.dumps(data))
                         self.client.send(json.dumps(data).encode())
+                        self.putBlock(-3+i%30,-3+i//30,spin,num,self.turn+1)
+                        self.easyDisp()
                         return
 
-
-
+        print("pass!!")
+        
 
     def receiveUpdate(self,message):
         jsondic=json.loads(message)
