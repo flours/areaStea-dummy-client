@@ -112,7 +112,20 @@ class gameLogic:
 
         print("pass!!")
         return False
-        
+
+    def getCanPutList(self):
+        ans=[]
+        for num in self.myblocks:
+            for i in range(900):
+                for spin in range(4):
+                    if self.canPut(-3+i%30,-3+i//30,spin,num,self.turn+1):
+                        ans.append([num,spin,-3+i%30,-3+i//30])
+        return ans
+    def randomizeField(self):
+        import random
+        for i in range(20):
+            for j in range(20):
+                self.field[i][j]=random.randint(0,4)&random.randint(0,4)
 
     def receiveUpdate(self,message):
         jsondic=json.loads(message)
@@ -140,6 +153,14 @@ class gameLogic:
 
 game=gameLogic()
 game.easyDisp()
+
+game.randomizeField()
+game.easyDisp()
+print(game.getCanPutList())
+
+exit(0)
+
+
 
 
 # 1.ソケットオブジェクトの作成
