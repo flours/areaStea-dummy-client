@@ -1,6 +1,7 @@
 import socket
 from blockdef import BlockDef
 import json
+import random
 target_ip = "ec2-54-248-128-220.ap-northeast-1.compute.amazonaws.com"
 target_port = 1234
 buffer_size = 8192
@@ -27,6 +28,7 @@ class gameLogic:
     def changeTurn(self):
         self.turn=(self.turn+1)%4
         cnt=0
+        return
         while not self.earyput(True):
             self.turn=(self.turn+1)%4
             cnt+=1
@@ -95,6 +97,22 @@ class gameLogic:
         if self.turn==self.myColor:
             self.earyput(False)
     def earyput(self,isCheckMode):
+        l=self.getCanPutList()
+        if isCheckMode and len(l)!=0:return True
+        if isCheckMode: return False
+        print(len(l),self.myblocks)
+
+        idx=random.randint(0,len(l)-1)
+        data={}
+        data["BlockId"]=l[idx][0]
+        data["spin"]=l[idx][1]
+        data["x"]=l[idx][2]
+        data["y"]=l[idx][3]
+        data["color"]=self.turn+1
+        print(json.dumps(data),"send_data")
+        self.client.send(json.dumps(data).encode())
+        return
+
         for num in self.myblocks:
             for i in range(900):
                 for spin in range(4):
@@ -113,13 +131,48 @@ class gameLogic:
         print("pass!!")
         return False
 
-    def getCanPutList(self):
+    def getCanPutList(self,color):
         ans=[]
         for num in self.myblocks:
             for i in range(900):
                 for spin in range(4):
-                    if self.canPut(-3+i%30,-3+i//30,spin,num,self.turn+1):
+                    if self.canPut(-3+i%30,-3+i//30,spin,num,color):
                         ans.append([num,spin,-3+i%30,-3+i//30])
+        return ans
+
+    def getCanPutList2(self,color):
+        ans=[]
+        sides=[[0,1],[1,0],[-1,0],[0,-1]]
+        cross=[[1,1],[1,-1],[-1,1],[-1,-1]]
+        edge_dic={0:[[19,19]],1:[[19,0]],2:[[0,19]],3:[[0,0]]}
+        import time
+        t1=time.time()
+
+        for x in range(20):
+            for y in range(20):
+                for i in range(4):
+                    if self.isIn(x+cross[i][0],y+cross[i][1]) and self.field[y+cross[i][1]][x+cross[i][0]]==color and self.field[y][x]==0:
+                        flag=True
+                        for side in sides:
+                            if self.isIn(x+side[0],y+side[1]) and self.field[y+side[1]][x+side[0]]==color:
+                                flag=False
+                        if flag:
+                            edge_dic[i].append([x,y])
+
+        for num in self.myblocks:
+            for spin in range(4):
+                for y in range(-1,6):
+                    for x in range(-1,6):
+                        for j in range(4):
+                            if 0<=x-cross[j][0] and x-cross[j][0]<5 and 0<=y-cross[j][1] and y-cross[j][1]<5 and self.KndBlock[num][spin][(y-cross[j][1])*5+x-cross[j][0]]:
+                                flag=True
+                                for side in sides:
+                                    if 0<=x+side[0] and x+side[0] <5 and  0<=y+side[1] and y+side[1] <5 and self.KndBlock[num][spin][(y+side[1])*5+x+side[0]]:
+                                        flag=False
+                                if flag: 
+                                    for place in edge_dic[j]:
+                                        if self.canPut(place[0]-x+cross[j][0],place[1]-y+cross[j][1],spin,num,color):
+                                            ans.append([num,spin,place[0]-x+cross[j][0],place[1]-y+cross[j][1]])
         return ans
     def randomizeField(self):
         import random
@@ -152,13 +205,25 @@ class gameLogic:
 
 
 game=gameLogic()
-game.easyDisp()
+#game.easyDisp()
 
 game.randomizeField()
 game.easyDisp()
-print(game.getCanPutList())
+print(sorted(game.getCanPutList2(1))==sorted(game.getCanPutList(1)))
+print(len(game.getCanPutList2(1)),len(game.getCanPutList(1)))
+import time
+t1=time.time()
+result2=game.getCanPutList2(1)
+t2=time.time()
+result=game.getCanPutList(1)
+t3=time.time()
+print(t3-t2,t2-t1)
+for i in result:
+    if i not in result2:
+        print(i)
 
-exit(0)
+exit()
+
 
 
 
@@ -182,5 +247,6 @@ while True:
     continue
   print(s)
   game.receiveMessage(s)
+  print("now turn ",game.turn)
   print("[*]Received a response : {}".format(response))
   s=""
