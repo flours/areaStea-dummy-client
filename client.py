@@ -4,6 +4,7 @@ import json
 import random
 import threading
 target_ip = "ec2-54-248-128-220.ap-northeast-1.compute.amazonaws.com"
+target_ip="ec2-3-23-115-207.us-east-2.compute.amazonaws.com"
 target_port = 1234
 buffer_size = 8192
 
@@ -197,7 +198,12 @@ class gameLogic:
         
     def receiveMessage(self,message):
         print(message)
-        jsondic=json.loads(message)
+        try:
+            jsondic=json.loads(message)
+        except:
+            print('error')
+            print(message)
+            exit(0)
         if jsondic["messageType"]=="Init":self.receiveInit(message)
         if jsondic["messageType"]=="Update":self.receiveUpdate(message)
 
@@ -250,8 +256,15 @@ def receiveFunc():
         s+=response.decode()
         if response.decode()[-1]!="\n":
             continue
-        print(s)
-        message_list.append(s)
+        if s.count("\n")>=2:
+            print(s,"count2")
+            s=s.split("\n")
+            print(s)
+            for i in s[:-1]:
+                message_list.append(i+"\n")
+            print(message_list)
+        else:
+            message_list.append(s)
         s=""
     
 t1 = threading.Thread(target=receiveFunc)
@@ -265,5 +278,6 @@ while True:
   # サーバからのレスポンスを受信
   game.receiveMessage(message_list[0])
   print("now turn ",game.turn,len(message_list))
-  print("[*]Received a response : {}".format(message_list[0]))
+  print("[*]Received a response : {}".format(message_list[0]),"ここまで")
+  print(message_list,"ここまで")
   message_list.pop(0)
