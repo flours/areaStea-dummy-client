@@ -1,7 +1,10 @@
 import socket
 from blockdef import BlockDef
 import json
+import random
+import threading
 target_ip = "ec2-54-248-128-220.ap-northeast-1.compute.amazonaws.com"
+target_ip="ec2-3-23-115-207.us-east-2.compute.amazonaws.com"
 target_port = 1234
 buffer_size = 8192
 
@@ -17,7 +20,11 @@ class gameLogic:
     def __init__(self):
         self.field=[[0]*20 for i in range(20)]
         self.KndBlock=BlockDef.definition
-        self.myblocks=readblock(self.KndBlock)
+        self.myblocks=[]
+        self.myblocks.append(readblock(self.KndBlock))
+        self.myblocks.append(readblock(self.KndBlock))
+        self.myblocks.append(readblock(self.KndBlock))
+        self.myblocks.append(readblock(self.KndBlock))
         self.turn=0
         self.Blockw=5
         self.Blockh=5
@@ -30,7 +37,9 @@ class gameLogic:
         while not self.earyput(True):
             self.turn=(self.turn+1)%4
             cnt+=1
-            if cnt==4:exit()
+            if cnt==4:
+                print("gameOver")
+                exit()
 
 
     def isIn(self,x,y):
@@ -71,8 +80,7 @@ class gameLogic:
             if not targetBlock[i]:continue
             self.field[y+i//Blockw][x+i%Blockw]=color
         
-        if self.turn==self.myColor:
-            self.myblocks.remove(blockId)
+        self.myblocks[self.turn].remove(blockId)
         self.changeTurn()
         return True
 
@@ -95,6 +103,20 @@ class gameLogic:
         if self.turn==self.myColor:
             self.earyput(False)
     def earyput(self,isCheckMode):
+        l=self.getCanPutList2(self.turn+1)
+        if isCheckMode and len(l)!=0:return True
+        if isCheckMode: return False
+
+        idx=random.randint(0,len(l)-1)
+        data={}
+        data["BlockId"]=l[idx][0]
+        data["spin"]=l[idx][1]
+        data["x"]=l[idx][2]
+        data["y"]=l[idx][3]
+        data["color"]=self.turn+1
+        self.client.send(json.dumps(data).encode())
+        return
+
         for num in self.myblocks:
             for i in range(900):
                 for spin in range(4):
@@ -112,7 +134,53 @@ class gameLogic:
 
         print("pass!!")
         return False
-        
+
+    def getCanPutList(self,color):
+        ans=[]
+        for num in self.myblocks[color-1]:
+            for i in range(900):
+                for spin in range(4):
+                    if self.canPut(-3+i%30,-3+i//30,spin,num,color):
+                        ans.append([num,spin,-3+i%30,-3+i//30])
+        return ans
+
+    def getCanPutList2(self,color):
+        ans=[]
+        sides=[[0,1],[1,0],[-1,0],[0,-1]]
+        cross=[[1,1],[1,-1],[-1,1],[-1,-1]]
+        edge_dic={0:[[19,19]],1:[[19,0]],2:[[0,19]],3:[[0,0]]}
+
+        for x in range(20):
+            for y in range(20):
+                for i in range(4):
+                    if self.isIn(x+cross[i][0],y+cross[i][1]) and self.field[y+cross[i][1]][x+cross[i][0]]==color and self.field[y][x]==0:
+                        flag=True
+                        for side in sides:
+                            if self.isIn(x+side[0],y+side[1]) and self.field[y+side[1]][x+side[0]]==color:
+                                flag=False
+                        if flag:
+                            edge_dic[i].append([x,y])
+
+        for num in self.myblocks[color-1]:
+            for spin in range(4):
+                for y in range(-1,6):
+                    for x in range(-1,6):
+                        for j in range(4):
+                            if 0<=x-cross[j][0] and x-cross[j][0]<5 and 0<=y-cross[j][1] and y-cross[j][1]<5 and self.KndBlock[num][spin][(y-cross[j][1])*5+x-cross[j][0]]:
+                                flag=True
+                                for side in sides:
+                                    if 0<=x+side[0] and x+side[0] <5 and  0<=y+side[1] and y+side[1] <5 and self.KndBlock[num][spin][(y+side[1])*5+x+side[0]]:
+                                        flag=False
+                                if flag: 
+                                    for place in edge_dic[j]:
+                                        if self.canPut(place[0]-x+cross[j][0],place[1]-y+cross[j][1],spin,num,color):
+                                            ans.append([num,spin,place[0]-x+cross[j][0],place[1]-y+cross[j][1]])
+        return ans
+    def randomizeField(self):
+        import random
+        for i in range(20):
+            for j in range(20):
+                self.field[i][j]=random.randint(0,4)&random.randint(0,4)
 
     def receiveUpdate(self,message):
         jsondic=json.loads(message)
@@ -130,7 +198,12 @@ class gameLogic:
         
     def receiveMessage(self,message):
         print(message)
-        jsondic=json.loads(message)
+        try:
+            jsondic=json.loads(message)
+        except:
+            print('error')
+            print(message)
+            exit(0)
         if jsondic["messageType"]=="Init":self.receiveInit(message)
         if jsondic["messageType"]=="Update":self.receiveUpdate(message)
 
@@ -139,7 +212,27 @@ class gameLogic:
 
 
 game=gameLogic()
-game.easyDisp()
+#game.easyDisp()
+
+#game.randomizeField()
+#game.easyDisp()
+#print(sorted(game.getCanPutList2(1))==sorted(game.getCanPutList(1)))
+#print(len(game.getCanPutList2(1)),len(game.getCanPutList(1)))
+#import time
+#t1=time.time()
+#result2=game.getCanPutList2(1)
+#t2=time.time()
+#result=game.getCanPutList(1)
+#t3=time.time()
+#print(t3-t2,t2-t1)
+#for i in result:
+#    if i not in result2:
+#        print(i)
+
+#exit()
+
+
+
 
 
 # 1.ソケットオブジェクトの作成
@@ -147,19 +240,44 @@ tcp_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # 2.サーバに接続
 tcp_client.connect((target_ip,target_port))
-
+print(dir(tcp_client))
+tcp_client.send(b"{\"UserName\":\"AI1\",\"Rate\":1500}")
 # サーバにデータを送信
 #tcp_client.send(b"Data by TCP Client!!")
 game.setclient(tcp_client)
 
-s=""
+
+message_list=[]
+
+def receiveFunc():
+    s=""
+    while True:
+        response=tcp_client.recv(buffer_size)
+        s+=response.decode()
+        if response.decode()[-1]!="\n":
+            continue
+        if s.count("\n")>=2:
+            print(s,"count2")
+            s=s.split("\n")
+            print(s)
+            for i in s[:-1]:
+                message_list.append(i+"\n")
+            print(message_list)
+        else:
+            message_list.append(s)
+        s=""
+    
+t1 = threading.Thread(target=receiveFunc)
+t1.setDaemon(True)
+t1.start()
 while True:
-  # サーバからのレスポンスを受信
-  response = tcp_client.recv(buffer_size)
-  s+=response.decode()
-  if response.decode()[-1]!="\n":
+
+  if len(message_list)==0:
     continue
-  print(s)
-  game.receiveMessage(s)
-  print("[*]Received a response : {}".format(response))
-  s=""
+  
+  # サーバからのレスポンスを受信
+  game.receiveMessage(message_list[0])
+  print("now turn ",game.turn,len(message_list))
+  print("[*]Received a response : {}".format(message_list[0]),"ここまで")
+  print(message_list,"ここまで")
+  message_list.pop(0)
